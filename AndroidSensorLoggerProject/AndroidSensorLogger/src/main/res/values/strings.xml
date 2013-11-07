@@ -5,6 +5,8 @@
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
     <string name="logger_service_started">Logger Service Started</string>
+    <string name="logger_service_connected">Logger Service Connected</string>
+    <string name="logger_service_disconnected">Logger Service Disconnected</string>
     <string name="logger_service_stopped">Logger Service Stopped</string>
     <string name="logger_notification_label">Logger Service Running</string>
 

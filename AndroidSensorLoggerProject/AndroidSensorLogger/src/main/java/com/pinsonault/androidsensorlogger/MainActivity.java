@@ -1,11 +1,15 @@
 package com.pinsonault.androidsensorlogger;
 
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.ActionBarActivity;
 import android.view.LayoutInflater;
@@ -23,6 +27,9 @@ public class MainActivity extends ActionBarActivity {
     TextView textMax, textReading;
     int mMax;
     SensorManager mSensorManager;
+    private boolean mIsBound = false;
+    private Sensor mLightSensor;
+    private LoggerService mLoggerService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,16 +39,20 @@ public class MainActivity extends ActionBarActivity {
         if (savedInstanceState == null) {
         }
 
+        doBindService();
+
+        setupLightSensor();
+    }
+
+    private void setupLightSensor() {
         lightMeter = (ProgressBar) findViewById(R.id.lightmeter);
         textMax = (TextView) findViewById(R.id.max);
         textReading = (TextView) findViewById(R.id.reading);
 
-        SensorManager mSensorManager
-                = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        Sensor lightSensor
-                = mSensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mLightSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
 
-        if (lightSensor == null) {
+        if (mLightSensor == null) {
             Toast.makeText(MainActivity.this,
                     "No Light Sensor! quit-",
                     Toast.LENGTH_LONG).show();
@@ -50,15 +61,12 @@ public class MainActivity extends ActionBarActivity {
             lightMeter.setMax(max);
             textMax.setText("Max Reading: " + String.valueOf(max));
 
-            mSensorManager.registerListener(lightSensorEventListener,
-                    lightSensor,
-                    SensorManager.SENSOR_DELAY_NORMAL
-            );
+            mSensorManager.registerListener(lightSensorEventListener, mLightSensor,
+                    SensorManager.SENSOR_DELAY_NORMAL);
         }
     }
 
-    SensorEventListener lightSensorEventListener
-            = new SensorEventListener() {
+    SensorEventListener lightSensorEventListener = new SensorEventListener() {
 
         @Override
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -73,16 +81,19 @@ public class MainActivity extends ActionBarActivity {
                 float currentReading = event.values[0];
                 if ((int)currentReading > mMax){
                     mMax = (int)currentReading;
-                    textMax.setText("Max Reading: " + String.valueOf(mMax));
+                    //textMax.setText("Max Reading: " + String.valueOf(mMax));
                     lightMeter.setMax(mMax);
                 }
                 lightMeter.setProgress((int) currentReading);
                 textReading.setText("Current Reading: " + String.valueOf(currentReading));
+
+                if (mLoggerService != null){
+                    textMax.setText("Max Reading: " + mLoggerService.getCurrentTime());
+                }
             }
         }
 
     };
-
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -123,6 +134,57 @@ public class MainActivity extends ActionBarActivity {
     @Override
     protected void onStop(){
         mSensorManager.unregisterListener(lightSensorEventListener);
+        super.onStop();
+    }
+
+    private ServiceConnection mLoggerServiceConnection = new ServiceConnection() {
+        public void onServiceConnected(ComponentName className, IBinder service) {
+            // This is called when the connection with the service has been
+            // established, giving us the service object we can use to
+            // interact with the service.  Because we have bound to a explicit
+            // service that we know is running in our own process, we can
+            // cast its IBinder to a concrete class and directly access it.
+            mLoggerService = ((LoggerService.LocalBinder)service).getService();
+
+            mIsBound = true;
+
+            // Tell the user about this for our demo.
+            //Toast.makeText(this, R.string.logger_service_connected,
+            //        Toast.LENGTH_SHORT).show();
+        }
+
+        public void onServiceDisconnected(ComponentName className) {
+            // This is called when the connection with the service has been
+            // unexpectedly disconnected -- that is, its process crashed.
+            // Because it is running in our same process, we should never
+            // see this happen.
+            mLoggerService = null;
+            mIsBound = false;
+            //Toast.makeText(this, R.string.logger_service_disconnected,
+            //        Toast.LENGTH_SHORT).show();
+        }
+    };
+
+    void doBindService() {
+        // Establish a connection with the service.  We use an explicit
+        // class name because we want a specific service implementation that
+        // we know will be running in our own process (and thus won't be
+        // supporting component replacement by other applications).
+        Intent loggerServiceIntent = new Intent(this, LoggerService.class);
+        bindService(loggerServiceIntent, mLoggerServiceConnection, Context.BIND_AUTO_CREATE);
+    }
+
+    void doUnbindService() {
+        if (mIsBound) {
+            // Detach our existing connection.
+            unbindService(mLoggerServiceConnection);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        doUnbindService();
     }
 
 }
