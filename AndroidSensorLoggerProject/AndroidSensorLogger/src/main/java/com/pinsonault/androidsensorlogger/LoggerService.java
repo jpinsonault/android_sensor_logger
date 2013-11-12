@@ -10,6 +10,7 @@ import android.widget.Toast;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.logging.Handler;
 
 /**
  * Created by joe on 11/5/13.
@@ -18,6 +19,8 @@ public class LoggerService extends Service {
     // This is the object that receives interactions from clients.  See
     // RemoteService for a more complete example.
     private final IBinder mBinder = new LocalBinder();
+    private Handler mTimerHandler;
+
 
     /**
      * Class for clients to access.  Because we know this service always
@@ -34,6 +37,8 @@ public class LoggerService extends Service {
     @Override
     public void onCreate() {
         Toast.makeText(this, R.string.logger_service_started, Toast.LENGTH_SHORT).show();
+
+        //mTimerHandler = new Handler();
     }
 
     @Override

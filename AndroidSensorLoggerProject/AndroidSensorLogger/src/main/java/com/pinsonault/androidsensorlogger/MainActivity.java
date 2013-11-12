@@ -171,6 +171,7 @@ public class MainActivity extends ActionBarActivity {
         // we know will be running in our own process (and thus won't be
         // supporting component replacement by other applications).
         Intent loggerServiceIntent = new Intent(this, LoggerService.class);
+        startService(loggerServiceIntent);
         bindService(loggerServiceIntent, mLoggerServiceConnection, Context.BIND_AUTO_CREATE);
     }
 
