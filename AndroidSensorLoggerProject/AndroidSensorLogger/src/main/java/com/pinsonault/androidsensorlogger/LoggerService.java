@@ -27,9 +27,7 @@ import java.util.TimerTask;
  * Created by joe on 11/5/13.
  */
 public class LoggerService extends Service {
-    public static final long NOTIFY_INTERVAL = 10 * 1000; // 10 seconds
-    // This is the object that receives interactions from clients.  See
-    // RemoteService for a more complete example.
+    public static final long LOG_INTERVAL = 2000;
     private final IBinder mBinder = new LocalBinder();
     // run on another Thread to avoid crash
     private Handler mHandler = new Handler();
@@ -65,26 +63,83 @@ public class LoggerService extends Service {
     public void onCreate() {
         Toast.makeText(this, R.string.logger_service_started, Toast.LENGTH_SHORT).show();
 
-        //mTimerHandler = new Handler();
-        // cancel if already existed
+        startLogging();
+    }
+
+    @Override
+    public void onDestroy() {
+
+        try {
+            mLogFileBuffer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        pauseLogging();
+
+        // Tell the user we stopped.
+        Toast.makeText(this, R.string.logger_service_stopped, Toast.LENGTH_SHORT).show();
+    }
+
+    /**************************************
+     Logging management functions
+     **************************************/
+
+    private void startLogging() {
+        // Start collecting sensor data, storing it in memory
+        openLogFile();
+        setupSensors();
+        resumeLogging();
+    }
+
+    private void resumeLogging() {
+        resetLoggingData();
+        registerListeners();
+        startLoggerTimer();
+    }
+
+    private void pauseLogging() {
+        // Stop collecting sensor data
+
+        mTimer.cancel();
+        unregisterListeners();
+    }
+
+    private void startLoggerTimer() {
         if(mTimer != null) {
             mTimer.cancel();
         } else {
             // recreate new
             mTimer = new Timer();
         }
-        // schedule task
-        mTimer.scheduleAtFixedRate(new LogSensorDataTimer(), 0, NOTIFY_INTERVAL);
 
-        startLogging();
+        mTimer.scheduleAtFixedRate(new LogSensorDataTimer(), 0, LOG_INTERVAL);
     }
 
-    private void startLogging() {
-        // Start collecting sensor data, storing it in memory
-        // A timer run periodically saving the data to disk
-        openLogFile();
-        setupSensors();
-        resumeLogging();
+    private void resetLoggingData() {
+        mLightReadingCumulative = 0.0f;
+        mLightReadingCount = 0;
+
+        mProximityReadingCumulative = 0.0f;
+        mProximityReadingCount = 0;
+
+        // Java defaults arrays to 0
+        mAccelerometerReadingCumulative = new float[3];
+        mAccelerometerReadingCount = 0;
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.i("LocalService", "Received start id " + startId + ": " + intent);
+        // We want this service to continue running until it is explicitly
+        // stopped, so return sticky.
+        return START_STICKY;
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        Log.i("LoggerService", "onBind");
+        return mBinder;
     }
 
     private void setupSensors() {
@@ -98,6 +153,39 @@ public class LoggerService extends Service {
     private void setupActivitySensor() {
 
     }
+
+
+    /**************************************
+     Sensor/Listener Functions
+     **************************************/
+    SensorEventListener mSensorEventListener = new SensorEventListener() {
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event.sensor.getType() == Sensor.TYPE_LIGHT) {
+                mLightReadingCumulative += event.values[0];
+                mLightReadingCount++;
+            }
+
+            if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
+                mProximityReadingCumulative += event.values[0];
+                mProximityReadingCount++;
+            }
+
+            if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                for (int i = 0; i < 3; i++){
+                    mAccelerometerReadingCumulative[i] += event.values[i];
+                }
+                mAccelerometerReadingCount++;
+            }
+        }
+    };
 
     private void registerListeners() {
         mSensorManager.registerListener(mSensorEventListener, mLightSensor,
@@ -114,62 +202,6 @@ public class LoggerService extends Service {
         mSensorManager.unregisterListener(mSensorEventListener);
     }
 
-    private void resumeLogging() {
-        resetLoggingData();
-
-        registerListeners();
-    }
-
-    private void pauseLogging() {
-        // Stop collecting sensor data
-        unregisterListeners();
-    }
-
-    private void resetLoggingData() {
-        mLightReadingCumulative = 0.0f;
-        mLightReadingCount = 0;
-
-        mProximityReadingCumulative = 0.0f;
-        mProximityReadingCount = 0;
-
-        mAccelerometerReadingCount = 0;
-        mAccelerometerReadingCumulative = new float[3];
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.i("LocalService", "Received start id " + startId + ": " + intent);
-        // We want this service to continue running until it is explicitly
-        // stopped, so return sticky.
-        return START_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        mSensorManager.unregisterListener(mSensorEventListener);
-
-        try {
-            mLogFileBuffer.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-
-        // Tell the user we stopped.
-        Toast.makeText(this, R.string.logger_service_stopped, Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        Log.i("LoggerService", "onBind");
-        return mBinder;
-    }
-
-    public String getCurrentTime() {
-        SimpleDateFormat dateformat = new SimpleDateFormat("HH:mm:ss MM/dd/yyyy", Locale.US);
-        return (dateformat.format(new Date()));
-    }
-
     class LogSensorDataTimer extends TimerTask {
 
         @Override
@@ -179,11 +211,10 @@ public class LoggerService extends Service {
 
                 @Override
                 public void run() {
-                    // display toast
-                    Toast.makeText(getApplicationContext(), "Writing to log file",
+                    pauseLogging();
+                    Toast.makeText(getApplicationContext(), makeLogLine(),
                             Toast.LENGTH_SHORT).show();
                     // Write to the log file
-                    pauseLogging();
                     appendLogFile();
                     resumeLogging();
                 }
@@ -191,34 +222,9 @@ public class LoggerService extends Service {
         }
     }
 
-    SensorEventListener mSensorEventListener = new SensorEventListener() {
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {
-            // TODO Auto-generated method stub
-
-        }
-
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            if (event.sensor.getType() == Sensor.TYPE_LIGHT) {
-                mLightReadingCumulative = event.values[0];
-                mLightReadingCount++;
-            }
-
-            if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
-                mProximityReadingCumulative = event.values[0];
-                mProximityReadingCount++;
-            }
-
-            if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-                for (int i = 0; i < 3; i++){
-                    mAccelerometerReadingCumulative[i] = event.values[i];
-                }
-                mAccelerometerReadingCount++;
-            }
-        }
-    };
+    /**************************************
+        Log File Functions
+    **************************************/
 
     private void openLogFile() {
         mLogFile = new File("sdcard/sensor_log.txt");
@@ -240,6 +246,11 @@ public class LoggerService extends Service {
         }
     }
 
+    public String getCurrentTime() {
+        SimpleDateFormat dateformat = new SimpleDateFormat("HH:mm:ss MM/dd/yyyy", Locale.US);
+        return (dateformat.format(new Date()));
+    }
+
     private void appendLogFile() {
         try
         {
@@ -252,7 +263,7 @@ public class LoggerService extends Service {
         }
     }
 
-    private CharSequence makeLogLine() {
+    private String makeLogLine() {
         float lightSensorAvg = mLightReadingCumulative / mLightReadingCount;
         float proximitySensorAvg = mProximityReadingCumulative / mProximityReadingCount;
 
