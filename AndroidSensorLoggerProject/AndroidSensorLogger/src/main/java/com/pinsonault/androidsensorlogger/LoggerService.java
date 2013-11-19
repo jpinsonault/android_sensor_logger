@@ -45,6 +45,8 @@ public class LoggerService extends Service {
     private float mProximityReadingCumulative;
     private int mAccelerometerReadingCount;
     private float[] mAccelerometerReadingCumulative;
+    private File mLogFile;
+    private BufferedWriter mLogFileBuffer;
 
 
     /**
@@ -72,7 +74,7 @@ public class LoggerService extends Service {
             mTimer = new Timer();
         }
         // schedule task
-        mTimer.scheduleAtFixedRate(new TimeDisplayTimerTask(), 0, NOTIFY_INTERVAL);
+        mTimer.scheduleAtFixedRate(new LogSensorDataTimer(), 0, NOTIFY_INTERVAL);
 
         startLogging();
     }
@@ -80,6 +82,7 @@ public class LoggerService extends Service {
     private void startLogging() {
         // Start collecting sensor data, storing it in memory
         // A timer run periodically saving the data to disk
+        openLogFile();
         setupSensors();
         resumeLogging();
     }
@@ -94,55 +97,6 @@ public class LoggerService extends Service {
 
     private void setupActivitySensor() {
 
-    }
-
-    private void setupAccelerometerSensor() {
-        mAccelerometerSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mAccelerometerReadingCount = 0;
-        mAccelerometerReadingCumulative = new float[3];
-
-        if (mLightSensor == null) {
-            Toast.makeText(getApplicationContext(),
-                    "No Accelerometer Sensor!",
-                    Toast.LENGTH_LONG).show();
-        } else {
-
-            mSensorManager.registerListener(mSensorEventListener, mAccelerometerSensor,
-                    SensorManager.SENSOR_DELAY_NORMAL);
-        }
-    }
-
-    private void setupProximitySensor() {
-        mProximitySensor = mSensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
-        mProximityReadingCount = 0;
-        mProximityReadingCumulative = 0.0f;
-
-
-        if (mLightSensor == null) {
-            Toast.makeText(getApplicationContext(),
-                    "No Proximity Sensor!",
-                    Toast.LENGTH_LONG).show();
-        } else {
-
-            mSensorManager.registerListener(mSensorEventListener, mProximitySensor,
-                    SensorManager.SENSOR_DELAY_NORMAL);
-        }
-    }
-
-    private void setupLightSensor() {
-        mLightSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
-        mLightReadingCount = 0;
-        mLightReadingCumulative = 0.0f;
-
-        if (mLightSensor == null) {
-            Toast.makeText(getApplicationContext(),
-                    "No Light Sensor!",
-                    Toast.LENGTH_LONG).show();
-        } else {
-
-            mSensorManager.registerListener(mSensorEventListener, mLightSensor,
-                    SensorManager.SENSOR_DELAY_NORMAL);
-        }
     }
 
     private void registerListeners() {
@@ -194,6 +148,13 @@ public class LoggerService extends Service {
     public void onDestroy() {
         mSensorManager.unregisterListener(mSensorEventListener);
 
+        try {
+            mLogFileBuffer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
         // Tell the user we stopped.
         Toast.makeText(this, R.string.logger_service_stopped, Toast.LENGTH_SHORT).show();
     }
@@ -209,7 +170,7 @@ public class LoggerService extends Service {
         return (dateformat.format(new Date()));
     }
 
-    class TimeDisplayTimerTask extends TimerTask {
+    class LogSensorDataTimer extends TimerTask {
 
         @Override
         public void run() {
@@ -219,16 +180,14 @@ public class LoggerService extends Service {
                 @Override
                 public void run() {
                     // display toast
-                    Toast.makeText(getApplicationContext(), getDateTime(),
+                    Toast.makeText(getApplicationContext(), "Writing to log file",
                             Toast.LENGTH_SHORT).show();
+                    // Write to the log file
+                    pauseLogging();
+                    appendLogFile();
+                    resumeLogging();
                 }
             });
-        }
-
-        private String getDateTime() {
-            // get date time in custom format
-            SimpleDateFormat sdf = new SimpleDateFormat("[yyyy/MM/dd - HH:mm:ss]");
-            return sdf.format(new Date());
         }
     }
 
@@ -262,32 +221,49 @@ public class LoggerService extends Service {
     };
 
     private void openLogFile() {
-        // TODO
+        mLogFile = new File("sdcard/sensor_log.txt");
+        try {
+            mLogFileBuffer = new BufferedWriter(new FileWriter(mLogFile, true));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-    }
-
-    private void appendLogFile() {
-        File logFile = new File("sdcard/log.file");
-        if (!logFile.exists())
+        if (!mLogFile.exists())
         {
             try
             {
-                logFile.createNewFile();
+                mLogFile.createNewFile();
             } catch (IOException e)
             {
                 e.printStackTrace();
             }
         }
+    }
+
+    private void appendLogFile() {
         try
         {
             // BufferedWriter for performance, true to set append to file flag
-            BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
-            buf.append("");
-            buf.newLine();
-            buf.close();
+            mLogFileBuffer.append(makeLogLine());
+            mLogFileBuffer.newLine();
         } catch (IOException e)
         {
             e.printStackTrace();
         }
+    }
+
+    private CharSequence makeLogLine() {
+        float lightSensorAvg = mLightReadingCumulative / mLightReadingCount;
+        float proximitySensorAvg = mProximityReadingCumulative / mProximityReadingCount;
+
+        float[] accelerometerSensorAvg = new float[3];
+        for (int i = 0; i < 3; i++) {
+            accelerometerSensorAvg[i] = mAccelerometerReadingCumulative[i] / mAccelerometerReadingCount;
+        }
+
+        String timeStamp = getCurrentTime();
+
+        return String.format("%s,%f,%f,%f,%f,%f", timeStamp, lightSensorAvg, proximitySensorAvg,
+                accelerometerSensorAvg[0], accelerometerSensorAvg[1],accelerometerSensorAvg[2]);
     }
 }
