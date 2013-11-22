@@ -1,19 +1,26 @@
 package com.pinsonault.androidsensorlogger;
 
+import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
-import java.io.BufferedWriter;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesClient;
+import com.google.android.gms.location.ActivityRecognitionClient;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -26,8 +33,13 @@ import java.util.TimerTask;
 /**
  * Created by joe on 11/5/13.
  */
-public class LoggerService extends Service {
-    public static final long LOG_INTERVAL = 2000;
+public class LoggerService extends Service implements GooglePlayServicesClient.ConnectionCallbacks, GooglePlayServicesClient.OnConnectionFailedListener{
+    public static final long LOG_INTERVAL = 5000;
+    private static final String TAG = "LoggerService";
+    private Context mContext;
+
+    private BroadcastReceiver mActivityRecognitionReciever;
+
     private final IBinder mBinder = new LocalBinder();
     // run on another Thread to avoid crash
     private Handler mHandler = new Handler();
@@ -44,7 +56,13 @@ public class LoggerService extends Service {
     private int mAccelerometerReadingCount;
     private float[] mAccelerometerReadingCumulative;
     private File mLogFile;
-    private BufferedWriter mLogFileBuffer;
+    private FileWriter mLogFileBuffer;
+    private String mLogFileName = "sensor_log.txt";
+
+    private static ActivityRecognitionClient mActivityRecognitionClient;
+    private static PendingIntent mCallbackIntent;
+
+    private static int UPDATE_INTERVAL = 60*1000;
 
 
     /**
@@ -62,7 +80,8 @@ public class LoggerService extends Service {
     @Override
     public void onCreate() {
         Toast.makeText(this, R.string.logger_service_started, Toast.LENGTH_SHORT).show();
-
+        mContext = getApplicationContext();
+        setupActivitySensor();
         startLogging();
     }
 
@@ -76,6 +95,8 @@ public class LoggerService extends Service {
         }
 
         pauseLogging();
+        stopActivityRecognitionScan();
+        unregisterReceiver(mActivityRecognitionReciever);
 
         // Tell the user we stopped.
         Toast.makeText(this, R.string.logger_service_stopped, Toast.LENGTH_SHORT).show();
@@ -108,12 +129,13 @@ public class LoggerService extends Service {
     private void startLoggerTimer() {
         if(mTimer != null) {
             mTimer.cancel();
-        } else {
-            // recreate new
-            mTimer = new Timer();
         }
 
-        mTimer.scheduleAtFixedRate(new LogSensorDataTimer(), 0, LOG_INTERVAL);
+        // recreate new
+        mTimer = new Timer();
+
+
+        mTimer.scheduleAtFixedRate(new LogSensorDataTimer(), LOG_INTERVAL, LOG_INTERVAL);
     }
 
     private void resetLoggingData() {
@@ -151,7 +173,17 @@ public class LoggerService extends Service {
     }
 
     private void setupActivitySensor() {
+        mActivityRecognitionReciever = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String activity = intent.getStringExtra("Activity");
+                int Confidence = intent.getExtras().getInt("Confidence");
+            }
+        };
 
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("com.pinsonault.androidsensorlogger.ACTIVITY_RECOGNITION_DATA");
+        registerReceiver(mActivityRecognitionReciever, filter);
     }
 
 
@@ -212,8 +244,8 @@ public class LoggerService extends Service {
                 @Override
                 public void run() {
                     pauseLogging();
-                    Toast.makeText(getApplicationContext(), makeLogLine(),
-                            Toast.LENGTH_SHORT).show();
+                    //Toast.makeText(getApplicationContext(), makeLogLine(),
+                    //        Toast.LENGTH_SHORT).show();
                     // Write to the log file
                     appendLogFile();
                     resumeLogging();
@@ -227,12 +259,7 @@ public class LoggerService extends Service {
     **************************************/
 
     private void openLogFile() {
-        mLogFile = new File("sdcard/sensor_log.txt");
-        try {
-            mLogFileBuffer = new BufferedWriter(new FileWriter(mLogFile, true));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        mLogFile = new File(getApplicationContext().getFilesDir(), mLogFileName);
 
         if (!mLogFile.exists())
         {
@@ -244,6 +271,12 @@ public class LoggerService extends Service {
                 e.printStackTrace();
             }
         }
+
+        try {
+            mLogFileBuffer = new FileWriter(mLogFile, true);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public String getCurrentTime() {
@@ -254,9 +287,11 @@ public class LoggerService extends Service {
     private void appendLogFile() {
         try
         {
+            openLogFile();
             // BufferedWriter for performance, true to set append to file flag
-            mLogFileBuffer.append(makeLogLine());
-            mLogFileBuffer.newLine();
+            mLogFileBuffer.write(makeLogLine());
+
+            mLogFileBuffer.close();
         } catch (IOException e)
         {
             e.printStackTrace();
@@ -274,7 +309,46 @@ public class LoggerService extends Service {
 
         String timeStamp = getCurrentTime();
 
-        return String.format("%s,%f,%f,%f,%f,%f", timeStamp, lightSensorAvg, proximitySensorAvg,
+        return String.format("%s,%f,%f,%f,%f,%f\n", timeStamp, lightSensorAvg, proximitySensorAvg,
                 accelerometerSensorAvg[0], accelerometerSensorAvg[1],accelerometerSensorAvg[2]);
+    }
+
+    /**
+     * Call this to start a scan - don't forget to stop the scan once it's done.
+     * Note the scan will not start immediately, because it needs to establish a connection with Google's servers - you'll be notified of this at onConnected
+     */
+    public void startActivityRecognitionScan(){
+
+        mActivityRecognitionClient	= new ActivityRecognitionClient(mContext, this, this);
+        mActivityRecognitionClient.connect();
+        Log.d(TAG, "startActivityRecognitionScan");
+    }
+
+    public void stopActivityRecognitionScan(){
+        try{
+            mActivityRecognitionClient.removeActivityUpdates(mCallbackIntent);
+            Log.d(TAG,"stopActivityRecognitionScan");
+        } catch (IllegalStateException e){
+            // probably the scan was not set up, we'll ignore
+        }
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult result) {
+        Log.d(TAG,"onConnectionFailed");
+    }
+
+    /**
+     * Connection established - start listening now
+     */
+    @Override
+    public void onConnected(Bundle connectionHint) {
+        Intent intent = new Intent(mContext, ActivityRecognitionIntentService.class);
+        mCallbackIntent = PendingIntent.getService(mContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        mActivityRecognitionClient.requestActivityUpdates(UPDATE_INTERVAL, mCallbackIntent);
+    }
+
+    @Override
+    public void onDisconnected() {
     }
 }

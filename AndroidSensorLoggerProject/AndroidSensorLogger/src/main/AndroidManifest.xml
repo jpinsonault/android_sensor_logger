@@ -5,7 +5,7 @@
     android:versionName="1.0" >
 
     <uses-sdk
-        android:minSdkVersion="7"
+        android:minSdkVersion="8"
         android:targetSdkVersion="18" />
 
     <application
@@ -23,11 +23,17 @@
             </intent-filter>
         </activity>
         <service android:name=".LoggerService" />
+        <!--<service android:name=".ActivityRecognitionIntentService" />-->
+
         <receiver android:name=".LoggerServiceReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <meta-data android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+
     </application>
 
     <uses-permission

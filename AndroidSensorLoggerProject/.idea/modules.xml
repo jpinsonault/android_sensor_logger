@@ -4,6 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/AndroidSensorLogger/AndroidSensorLogger.iml" filepath="$PROJECT_DIR$/AndroidSensorLogger/AndroidSensorLogger.iml" />
       <module fileurl="file://$PROJECT_DIR$/AndroidSensorLoggerProject.iml" filepath="$PROJECT_DIR$/AndroidSensorLoggerProject.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../google-play-services_lib/google-play-services_lib.iml" filepath="$PROJECT_DIR$/../google-play-services_lib/google-play-services_lib.iml" />
+      <module fileurl="file://$PROJECT_DIR$/libs/libs.iml" filepath="$PROJECT_DIR$/libs/libs.iml" />
     </modules>
   </component>
 </project>
