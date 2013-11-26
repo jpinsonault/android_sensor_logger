@@ -62,7 +62,9 @@ public class LoggerService extends Service implements GooglePlayServicesClient.C
     private static ActivityRecognitionClient mActivityRecognitionClient;
     private static PendingIntent mCallbackIntent;
 
-    private static int UPDATE_INTERVAL = 60*1000;
+    private static int ACTIVITY_UPDATE_INTERVAL = 30*1000;
+    private int mLatestActivity;
+    private int mLatestActivityConfidence;
 
 
     /**
@@ -173,17 +175,25 @@ public class LoggerService extends Service implements GooglePlayServicesClient.C
     }
 
     private void setupActivitySensor() {
+        mLatestActivity = 0;
+        mLatestActivityConfidence = 0;
+
         mActivityRecognitionReciever = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                String activity = intent.getStringExtra("Activity");
-                int Confidence = intent.getExtras().getInt("Confidence");
+                mLatestActivity = intent.getExtras().getInt("Activity");
+                mLatestActivityConfidence = intent.getExtras().getInt("Confidence");
+
+                Log.i("################# Got a response", Integer.toString(mLatestActivity));
             }
         };
 
         IntentFilter filter = new IntentFilter();
+        Log.i("setupActivitySensor", "Before registerReciever");
         filter.addAction("com.pinsonault.androidsensorlogger.ACTIVITY_RECOGNITION_DATA");
         registerReceiver(mActivityRecognitionReciever, filter);
+
+        startActivityRecognitionScan();
     }
 
 
@@ -309,8 +319,9 @@ public class LoggerService extends Service implements GooglePlayServicesClient.C
 
         String timeStamp = getCurrentTime();
 
-        return String.format("%s,%f,%f,%f,%f,%f\n", timeStamp, lightSensorAvg, proximitySensorAvg,
-                accelerometerSensorAvg[0], accelerometerSensorAvg[1],accelerometerSensorAvg[2]);
+        return String.format("%s,%f,%f,%f,%f,%f,%d,%d\n", timeStamp, lightSensorAvg, proximitySensorAvg,
+                accelerometerSensorAvg[0], accelerometerSensorAvg[1],accelerometerSensorAvg[2],
+                mLatestActivity, mLatestActivityConfidence);
     }
 
     /**
@@ -321,13 +332,13 @@ public class LoggerService extends Service implements GooglePlayServicesClient.C
 
         mActivityRecognitionClient	= new ActivityRecognitionClient(mContext, this, this);
         mActivityRecognitionClient.connect();
-        Log.d(TAG, "startActivityRecognitionScan");
+        Log.i(TAG, "startActivityRecognitionScan");
     }
 
     public void stopActivityRecognitionScan(){
         try{
             mActivityRecognitionClient.removeActivityUpdates(mCallbackIntent);
-            Log.d(TAG,"stopActivityRecognitionScan");
+            Log.i(TAG,"stopActivityRecognitionScan");
         } catch (IllegalStateException e){
             // probably the scan was not set up, we'll ignore
         }
@@ -335,7 +346,7 @@ public class LoggerService extends Service implements GooglePlayServicesClient.C
 
     @Override
     public void onConnectionFailed(ConnectionResult result) {
-        Log.d(TAG,"onConnectionFailed");
+        Log.i(TAG,"onConnectionFailed");
     }
 
     /**
@@ -344,8 +355,8 @@ public class LoggerService extends Service implements GooglePlayServicesClient.C
     @Override
     public void onConnected(Bundle connectionHint) {
         Intent intent = new Intent(mContext, ActivityRecognitionIntentService.class);
-        mCallbackIntent = PendingIntent.getService(mContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        mActivityRecognitionClient.requestActivityUpdates(UPDATE_INTERVAL, mCallbackIntent);
+        mCallbackIntent = PendingIntent.getBroadcast(mContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        mActivityRecognitionClient.requestActivityUpdates(ACTIVITY_UPDATE_INTERVAL, mCallbackIntent);
     }
 
     @Override

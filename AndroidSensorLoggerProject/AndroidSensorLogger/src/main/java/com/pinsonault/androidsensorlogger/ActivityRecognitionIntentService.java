@@ -19,7 +19,11 @@ public class ActivityRecognitionIntentService extends IntentService {
     public ActivityRecognitionIntentService(String name) {
         super(name);
     }
-    //..
+
+    public ActivityRecognitionIntentService() {
+        super("Activity Recognition Service");
+    }
+
     /**
      * Called when a new activity detection update is available.
      */
@@ -40,7 +44,7 @@ public class ActivityRecognitionIntentService extends IntentService {
             int activityType = mostProbableActivity.getType();
 
             Intent sendToLoggerIntent = new Intent("com.pinsonault.androidsensorlogger.ACTIVITY_RECOGNITION_DATA");
-            sendToLoggerIntent.putExtra("Activity", getFriendlyName((activityType)));
+            sendToLoggerIntent.putExtra("Activity", activityType);
             sendToLoggerIntent.putExtra("Confidence", confidence);
             sendBroadcast(sendToLoggerIntent);
         }
