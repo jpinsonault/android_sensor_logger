@@ -28,6 +28,7 @@ def main():
     setup_tables()
     log_data = get_log_data(args.log_file)
 
+    # print([entry for entry in log_data if entry["timestamp"] == "21:52:48 11/19/2013"])
     save_data(log_data)
 
 
@@ -74,6 +75,8 @@ def print_save_results(num_entries, records_added, records_skipped):
 
 
 def save_entry(entry, log_entry_object):
+    if entry["light_reading"] == "NaN":
+        return False
     new_entry = LogEntry(**entry)
 
     try:
