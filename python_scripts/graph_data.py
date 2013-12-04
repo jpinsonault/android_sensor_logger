@@ -47,7 +47,7 @@ def plot_data():
     log_data = sorted(log_data, key=lambda row: datetime.strptime(row.timestamp, format_string))
 
     light_readings = [row.light_reading for row in log_data]
-    light_readings = [min(reading, 1000.0) for reading in light_readings]
+    light_readings = [min(reading, 100.0) for reading in light_readings]
     timestamps = [datetime.strptime(row.timestamp, format_string) for row in log_data]
 
     fig = plt.figure()

@@ -1,0 +1,31 @@
+TODO
+	Categorize into
+
+		Directly from data
+			Walking
+			Car/train
+			Night
+			Day
+		Infer from data
+			Inside
+			Outside
+			On surface
+			In pocket
+			In a hand
+
+
+	Cluster data, see what comes out
+		See if we can pickout patterns and label them
+
+	Smooth out data
+
+Output
+	How much time do I spend walking?
+		Walking and using the phone?
+	Still/sitting/standing?
+		and using the phone?
+	Inside/outside?
+	How often is the phone on a desk?
+		In a pocket?
+
+	How does light level correlate with day/night cycles
