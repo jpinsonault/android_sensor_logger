@@ -2,8 +2,6 @@ TODO
 	Categorize into
 
 		Directly from data
-			Walking
-			Car/train
 			Night
 			Day
 		Infer from data
@@ -20,11 +18,10 @@ TODO
 	Smooth out data
 
 Output
-	How much time do I spend walking?
-		Walking and using the phone?
-	Still/sitting/standing?
-		and using the phone?
-	Inside/outside?
+	How much time do I spend doing the various activities?
+		Split into day/night periods
+		Bin into hours
+		Inside/outside?
 	How often is the phone on a desk?
 		In a pocket?
 
