@@ -1,5 +1,6 @@
 import numpy as np
 import argparse
+from pprint import pprint
 from sklearn import mixture
 from sklearn import datasets
 import matplotlib.pyplot as plt
@@ -22,7 +23,7 @@ def parse_args():
 
 
 def main():
-    g = mixture.GMM(n_components=5)
+    g = mixture.GMM(n_components=4)
 
     log_entries = load_light()
     light_data = [min(row.light_reading, 120) for row in log_entries]
@@ -30,20 +31,20 @@ def main():
 
     g.fit(light_data)
 
-    # print("Target classification")
-    # print(light_data)
-    results = predict(g, light_data)
+    predictions = predict(g, light_data)
 
-    print("\nResults")
-    # np.set_printoptions(threshold='nan')
-    
+    light_dict = {}
+    inside = bin_by_hour(timestamps, predictions, [0,1])
+    outside = bin_by_hour(timestamps, predictions, [2,3])
 
-    # for index in range(len(light_data)):
-    #     print("{},{}".format(timestamps[index], results[index]))
+    pprint(inside)
+    pprint(outside)
 
 
+
+def plot_light_data(timestamps, predictions):
     fig, ax = plt.subplots()
-    ax.plot_date(timestamps, results, 'b')
+    ax.plot_date(timestamps, predictions, 'b')
 
     ax.xaxis.set_minor_locator(HourLocator(arange(0,25,6)))
     ax.xaxis.set_minor_formatter(DateFormatter('%H'))
@@ -53,6 +54,18 @@ def main():
     ax.fmt_xdata = DateFormatter('%H:%M:%S')
     fig.autofmt_xdate()
     plt.show()
+
+
+def bin_by_hour(timestamps, predictions, clusters):
+    filtered = [timestamps[index] for index, entry in enumerate(timestamps) if predictions[index] in clusters]
+
+    buckets = {hour: 0 for hour in range(24)}
+
+    for time in filtered:
+        hour = time.hour
+        buckets[hour] = buckets.get(hour, 0) + 1
+
+    return buckets
 
 
 def predict(gmm, data):
@@ -88,7 +101,7 @@ def make_converter(gmm, data):
 
 
 def get_most_common(data, index):
-    window_size = 20
+    window_size = 100
 
     start = max(index - window_size, 0)
     end = min(index + window_size, len(data))

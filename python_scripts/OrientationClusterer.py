@@ -79,6 +79,9 @@ class OrientationClusterer:
         # Format it in a numpy array
         self.data_array = self.to_numpy()
 
+        self.is_fitted = False
+        self.is_predicted = False
+
     @cache_dict("accelerometer_data.json")
     def get_accelerometer_data(self):
         # Sort the data
@@ -89,7 +92,12 @@ class OrientationClusterer:
         return accelerometer_data
 
     def fit(self):
+        # Skip if already fitted
+        if self.is_fitted:
+            return
         self.gmm.fit(self.data_array)
+        self.is_fitted = True
+
 
     def to_numpy(self):
         """
@@ -104,13 +112,17 @@ class OrientationClusterer:
     def predict(self, data=None):
         if data is None:
             data = self.data_array
-        return self.gmm.predict(data)
+        self.predictions = self.gmm.predict(data)
+
+        return self.predictions
 
     def classify(self):
         """
             Assign names to the clusters
             Returns a dict to translate the cluster number to a name
         """
+        self.fit()
+
         ids_to_names = {name: set() for name in REFERENCE_DATA}
 
         for name, reference_points in REFERENCE_DATA.iteritems():
